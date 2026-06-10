@@ -4,7 +4,7 @@ Flask REST API for the Farm Score Project.
 """
 
 import uuid
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, render_template
 from flask_cors import CORS
 from farmscore import calculate_score
 
@@ -19,9 +19,9 @@ score_store: dict = {}
 # Routes
 # ---------------------------------------------------------------------------
 
-@app.get("/")
-def health_check():
-    return jsonify({"status": "ok", "message": "Farm Score API is running."})
+@app.route("/")
+def home():
+    return render_template("index.html")
 
 
 @app.post("/score")
