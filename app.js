@@ -1,150 +1,139 @@
 /**
  * app.js
- * Frontend logic for Farm Score Project.
+ * FarmScore Frontend Logic
  */
 
 const API_BASE = "https://farm-score-project.onrender.com";
 
-// ── Slider live-update ──────────────────────────────────────
+// Slider Value Update
 const sliders = [
-  { id: "soil_health",           valId: "soil_val"  },
+  { id: "soil_health", valId: "soil_val" },
   { id: "water_usage_efficiency", valId: "water_val" },
-  { id: "biodiversity_score",    valId: "bio_val"   },
+  { id: "biodiversity_score", valId: "bio_val" }
 ];
 
 sliders.forEach(({ id, valId }) => {
   const slider = document.getElementById(id);
   const display = document.getElementById(valId);
-  slider.addEventListener("input", () => {
-    display.textContent = slider.value;
-  });
+
+  if (slider && display) {
+    slider.addEventListener("input", () => {
+      display.textContent = slider.value;
+    });
+  }
 });
 
-// ── Submit ──────────────────────────────────────────────────
+// Submit Form
 async function submitFarm() {
+
   clearError();
 
   const payload = {
-    farm_name:              val("farm_name"),
-    crop_type:              val("crop_type"),
-    area_hectares:          numVal("area_hectares"),
-    irrigation_type:        val("irrigation_type"),
-    soil_health:            numVal("soil_health"),
-    water_usage_efficiency: numVal("water_usage_efficiency"),
-    biodiversity_score:     numVal("biodiversity_score"),
+    farm_name: document.getElementById("farm_name").value,
+    crop_type: document.getElementById("crop_type").value,
+    area_hectares: parseFloat(document.getElementById("area_hectares").value) || 0,
+    irrigation_type: document.getElementById("irrigation_type").value,
+    soil_health: parseFloat(document.getElementById("soil_health").value) || 0,
+    water_usage_efficiency:
+      parseFloat(document.getElementById("water_usage_efficiency").value) || 0,
+    biodiversity_score:
+      parseFloat(document.getElementById("biodiversity_score").value) || 0
   };
 
-  // Basic validation
-  const required = ["farm_name", "crop_type", "irrigation_type"];
-  const missing = required.filter((k) => !payload[k]);
-  if (missing.length) {
-    showError("Please fill in: " + missing.map(humanise).join(", "));
-    return;
-  }
-
   const btn = document.getElementById("submit-btn");
-  btn.textContent = "Calculating…";
+
   btn.disabled = true;
+  btn.innerText = "Calculating...";
 
   try {
-    const res = await fetch(`${API_BASE}/score`, {
+
+    const response = await fetch(`${API_BASE}/score`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(payload)
     });
 
-    const data = await res.json();
+    const data = await response.json();
 
-    if (!res.ok) {
-      throw new Error(data.error || "Server error");
+    if (!response.ok) {
+      throw new Error(data.error || "Server Error");
     }
 
     renderResults(data);
+
   } catch (err) {
-    showError("Could not reach the API. Is the backend running? (" + err.message + ")");
+
+    showError(err.message);
+
   } finally {
-    btn.textContent = "Calculate Score";
+
     btn.disabled = false;
+    btn.innerText = "Calculate Score";
   }
 }
 
-// ── Render ──────────────────────────────────────────────────
+// Render Results
 function renderResults(data) {
-  document.getElementById("form-section").classList.add("hidden");
-  const section = document.getElementById("result-section");
-  section.classList.remove("hidden");
 
-  document.getElementById("grade-badge").textContent   = data.grade;
-  document.getElementById("total-score").textContent   = data.total_score;
-  document.getElementById("result-farm-name").textContent = data.farm_name;
+  document.getElementById("result-section").style.display = "block";
 
-  // Breakdown bars
-  const maxPoints = { soil_health: 30, water_efficiency: 25, biodiversity: 20, practices: 25 };
-  const labels     = {
-    soil_health:      "Soil Health",
-    water_efficiency: "Water Efficiency",
-    biodiversity:     "Biodiversity",
-    practices:        "Sustainable Practices",
-  };
+  document.getElementById("farm-name-result").innerText =
+    data.farm_name;
 
-  const breakdownEl = document.getElementById("breakdown");
-  breakdownEl.innerHTML = "";
+  document.getElementById("score-result").innerText =
+    data.total_score;
 
-  Object.entries(data.breakdown).forEach(([key, score]) => {
-    const max   = maxPoints[key] || 25;
-    const pct   = Math.min((score / max) * 100, 100).toFixed(1);
-    const row   = document.createElement("div");
-    row.className = "bar-row";
-    row.innerHTML = `
-      <div class="bar-label">
-        <span>${labels[key] || key}</span>
-        <span>${score} / ${max}</span>
+  document.getElementById("grade-result").innerText =
+    data.grade;
+
+  // Breakdown
+  const breakdownDiv = document.getElementById("breakdown");
+
+  breakdownDiv.innerHTML = "";
+
+  for (const key in data.breakdown) {
+
+    breakdownDiv.innerHTML += `
+      <div class="score-item">
+        <strong>${formatLabel(key)}</strong>
+        <span>${data.breakdown[key]}</span>
       </div>
-      <div class="bar-track">
-        <div class="bar-fill" style="width: 0%" data-pct="${pct}"></div>
-      </div>`;
-    breakdownEl.appendChild(row);
-  });
-
-  // Animate bars after paint
-  requestAnimationFrame(() => {
-    document.querySelectorAll(".bar-fill").forEach((bar) => {
-      bar.style.width = bar.dataset.pct + "%";
-    });
-  });
+    `;
+  }
 
   // Recommendations
-  const recList = document.getElementById("rec-list");
+  const recList = document.getElementById("recommendations");
+
   recList.innerHTML = "";
-  (data.recommendations || []).forEach((rec) => {
-    const li = document.createElement("li");
-    li.textContent = rec;
-    recList.appendChild(li);
+
+  data.recommendations.forEach(rec => {
+
+    recList.innerHTML += `<li>${rec}</li>`;
+
   });
 }
 
-// ── Reset ───────────────────────────────────────────────────
-function resetForm() {
-  document.getElementById("result-section").classList.add("hidden");
-  document.getElementById("form-section").classList.remove("hidden");
+// Helpers
+function formatLabel(text) {
+  return text
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, c => c.toUpperCase());
 }
 
-// ── Helpers ─────────────────────────────────────────────────
-function val(id)    { return document.getElementById(id)?.value?.trim() ?? ""; }
-function numVal(id) { return parseFloat(document.getElementById(id)?.value) || 0; }
+function showError(message) {
 
-function showError(msg) {
-  const el = document.getElementById("error-msg");
-  el.textContent = msg;
-  el.classList.remove("hidden");
+  const err = document.getElementById("error-msg");
+
+  err.innerText = message;
+  err.style.display = "block";
 }
 
 function clearError() {
-  const el = document.getElementById("error-msg");
-  el.textContent = "";
-  el.classList.add("hidden");
-}
 
-function humanise(key) {
-  return key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+  const err = document.getElementById("error-msg");
+
+  err.innerText = "";
+  err.style.display = "none";
 }
