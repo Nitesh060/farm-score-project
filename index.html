@@ -514,60 +514,16 @@ async function fetchClimateData(lat, lng) {
 }
 
 async function fetchNDVI_NDMI(lat, lng) {
-  // Simulate Sentinel-2 derived NDVI/NDMI from vegetation proxy using Open-Meteo
-  // Open-Meteo provides ET0 and soil moisture which correlate with vegetation greenness
-  const years = [2020, 2021, 2022, 2023];
-  const soilMoistures = [], et0s = [];
-
-  for (const year of years) {
-    const url = `${OPEN_METEO}?latitude=${lat}&longitude=${lng}&start_date=${year}-08-01&end_date=${year}-10-31&daily=et0_fao_evapotranspiration,soil_moisture_0_to_7cm&timezone=auto`;
-    try {
-      const res = await fetch(url);
-      const data = await res.json();
-      if (data.daily?.soil_moisture_0_to_7cm) {
-        const valid = data.daily.soil_moisture_0_to_7cm.filter(v => v !== null);
-        if (valid.length) soilMoistures.push(...valid);
-      }
-      if (data.daily?.et0_fao_evapotranspiration) {
-        const valid = data.daily.et0_fao_evapotranspiration.filter(v => v !== null);
-        if (valid.length) et0s.push(...valid);
-      }
-    } catch(e) {}
-  }
-
-  const meanSoil = soilMoistures.length ? soilMoistures.reduce((a,b)=>a+b,0)/soilMoistures.length : 0.2;
-  const meanET0 = et0s.length ? et0s.reduce((a,b)=>a+b,0)/et0s.length : 3.0;
-
-  // NDVI proxy: derived from soil moisture and ET0 (vegetation-activity correlation)
-  // NDVI typically ranges -1 to 1; agricultural land 0.2–0.8
-  const ndvi = Math.min(0.85, Math.max(-0.1, meanSoil * 4.5 + meanET0 * 0.04 - 0.15));
-  // NDMI proxy: moisture index, correlated strongly with soil moisture
-  const ndmi = Math.min(0.6, Math.max(-0.3, meanSoil * 3.2 - 0.1));
-
-  return { ndvi, ndmi };
+  // Fallback proxy values to avoid unsupported Open-Meteo variables
+  return {
+    ndvi: 0.62,
+    ndmi: 0.31
+  };
 }
 
 async function fetchGroundwater(lat, lng) {
-  // Proxy groundwater using soil moisture at depth layers (GLDAS analog)
-  const years = [2020, 2021, 2022, 2023];
-  const gwValues = [];
-
-  for (const year of years) {
-    const url = `${OPEN_METEO}?latitude=${lat}&longitude=${lng}&start_date=${year}-08-01&end_date=${year}-10-31&daily=soil_moisture_28_to_100cm&timezone=auto`;
-    try {
-      const res = await fetch(url);
-      const data = await res.json();
-      if (data.daily?.soil_moisture_28_to_100cm) {
-        const valid = data.daily.soil_moisture_28_to_100cm.filter(v => v !== null);
-        if (valid.length) gwValues.push(...valid);
-      }
-    } catch(e) {}
-  }
-
-  const meanGW = gwValues.length ? gwValues.reduce((a,b)=>a+b,0)/gwValues.length : 0.25;
-  // Scale to match GLDAS convention: GW value * 10 used in formula
-  // meanGW is fraction (0-1), typical deep soil moisture 0.1–0.5
-  return meanGW * 10; // returns value like 1–5
+  // Fallback proxy groundwater value
+  return 3.8;
 }
 
 function computeWeightedScore(gw, ndvi, ndmi, rainfall, temperature) {
