@@ -3,7 +3,6 @@ farmscore.py
 Core scoring logic for the Farm Score Project.
 """
 
-
 WEIGHTS = {
     "soil_health": 0.30,
     "water_efficiency": 0.25,
@@ -11,22 +10,30 @@ WEIGHTS = {
     "practices": 0.25,
 }
 
-MAX_INPUT = 10  # All input scores are expected on a 0–10 scale
+MAX_INPUT = 10.0  # Input scores should be between 0 and 10
 
 
 def calculate_score(data: dict) -> dict:
     """
-    Calculate a farm's overall score from input metrics.
+    Calculate a farm's sustainability score.
 
-    Expected keys in `data`:
-        - soil_health (0–10)
-        - water_usage_efficiency (0–10)
-        - biodiversity_score (0–10)
-        - irrigation_type (str): 'drip' | 'sprinkler' | 'flood' | 'rainfed'
-        - crop_type (str): any string (used for practice bonus)
+    Expected input:
+        farm_name (str)
+        soil_health (0-10)
+        water_usage_efficiency (0-10)
+        biodiversity_score (0-10)
+        irrigation_type ('drip', 'sprinkler', 'flood', 'rainfed')
+        crop_type (str)
 
-    Returns a dict with total_score, grade, breakdown, and recommendations.
+    Returns:
+        dict containing:
+            farm_name
+            total_score
+            grade
+            breakdown
+            recommendations
     """
+
     soil = _clamp(data.get("soil_health", 0))
     water = _clamp(data.get("water_usage_efficiency", 0))
     biodiversity = _clamp(data.get("biodiversity_score", 0))
@@ -39,49 +46,49 @@ def calculate_score(data: dict) -> dict:
         "practices": round(practices * WEIGHTS["practices"] * 10, 2),
     }
 
-    total = round(sum(breakdown.values()), 2)
-    grade = _grade(total)
-    recommendations = _recommendations(data, breakdown)
+    total_score = round(sum(breakdown.values()), 2)
 
     return {
         "farm_name": data.get("farm_name", "Unknown Farm"),
-        "total_score": total,
-        "grade": grade,
+        "total_score": total_score,
+        "grade": _grade(total_score),
         "breakdown": breakdown,
-        "recommendations": recommendations,
+        "recommendations": _recommendations(data, breakdown),
     }
 
 
-# ---------------------------------------------------------------------------
-# Internal helpers
-# ---------------------------------------------------------------------------
+# ------------------------------------------------------------------
+# Helper Functions
+# ------------------------------------------------------------------
 
-def _clamp(value, lo: float = 0, hi: float = MAX_INPUT) -> float:
-    """Clamp a value to [lo, hi]."""
+def _clamp(value, lo=0.0, hi=MAX_INPUT):
+    """Ensure a numeric value stays within range."""
     try:
-        return max(lo, min(float(value), hi))
+        value = float(value)
     except (TypeError, ValueError):
         return lo
 
+    return max(lo, min(value, hi))
+
 
 def _practices_score(data: dict) -> float:
-    """
-    Derive a 0–10 practices score from irrigation type and crop signals.
-    Extend this function to add more sophisticated logic.
-    """
-    score = 5.0  # baseline
+    """Calculate farming practices score (0-10)."""
 
-    irrigation_bonuses = {
+    score = 5.0
+
+    irrigation_bonus = {
         "drip": 3.0,
         "sprinkler": 1.5,
         "rainfed": 2.0,
         "flood": -1.0,
     }
-    irrigation = str(data.get("irrigation_type", "")).lower().strip()
-    score += irrigation_bonuses.get(irrigation, 0)
 
-    # Simple crop-diversity proxy: longer / more descriptive crop type → slight bonus
-    crop = str(data.get("crop_type", ""))
+    irrigation = str(data.get("irrigation_type", "")).strip().lower()
+    score += irrigation_bonus.get(irrigation, 0)
+
+    crop = str(data.get("crop_type", "")).strip()
+
+    # Bonus for descriptive crop information
     if len(crop) > 5:
         score += 0.5
 
@@ -89,35 +96,55 @@ def _practices_score(data: dict) -> float:
 
 
 def _grade(score: float) -> str:
+    """Convert numeric score into grade."""
+
     if score >= 90:
         return "A"
-    if score >= 80:
+    elif score >= 80:
         return "B"
-    if score >= 70:
+    elif score >= 70:
         return "C"
-    if score >= 60:
+    elif score >= 60:
         return "D"
-    return "F"
+    else:
+        return "F"
 
 
 def _recommendations(data: dict, breakdown: dict) -> list:
-    recs = []
+    """Generate improvement recommendations."""
+
+    recommendations = []
 
     if breakdown["soil_health"] < 20:
-        recs.append("Consider cover cropping or composting to improve soil health.")
+        recommendations.append(
+            "Improve soil health using compost, cover crops, or crop rotation."
+        )
 
     if breakdown["water_efficiency"] < 15:
-        recs.append("Switching to drip irrigation can significantly improve water efficiency.")
+        recommendations.append(
+            "Adopt drip irrigation to improve water-use efficiency."
+        )
 
     if breakdown["biodiversity"] < 12:
-        recs.append("Introduce hedgerows or wildflower strips to boost on-farm biodiversity.")
+        recommendations.append(
+            "Increase biodiversity by planting hedgerows or wildflower strips."
+        )
 
     if breakdown["practices"] < 15:
-        irrigation = str(data.get("irrigation_type", "")).lower()
+        irrigation = str(data.get("irrigation_type", "")).strip().lower()
+
         if irrigation == "flood":
-            recs.append("Flood irrigation is water-intensive; consider drip or sprinkler systems.")
+            recommendations.append(
+                "Replace flood irrigation with drip or sprinkler irrigation."
+            )
+        else:
+            recommendations.append(
+                "Adopt additional sustainable farming practices."
+            )
 
-    if not recs:
-        recs.append("Great work! Keep maintaining your current sustainable farming practices.")
+    if not recommendations:
+        recommendations.append(
+            "Excellent sustainability performance. Continue current practices."
+        )
 
-    return recs
+    return recommendations
